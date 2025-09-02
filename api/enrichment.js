@@ -46,7 +46,7 @@ const INGREDIENT_OPTIONS = [
 
 class RecipeEnrichmentSystem {
   constructor() {
-    this.emailTransporter = nodemailer.createTransporter({
+    this.emailTransporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user: EMAIL_USER,
@@ -658,18 +658,57 @@ export default RecipeEnrichmentSystem;
 
 // For Vercel API route
 export async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-  
   const enricher = new RecipeEnrichmentSystem();
   
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
   try {
-    const result = await enricher.run();
-    res.status(200).json(result);
+    if (req.method === 'GET') {
+      // Return existing enrichment data for frontend display
+      const reviewData = await enricher.createReviewData(
+        await enricher.getIncompleteRecipes()
+      );
+      
+      const stats = {
+        totalRecipes: reviewData.length,
+        totalSuggestions: reviewData.reduce((sum, item) => {
+          return sum + Object.keys(item.suggestedChanges).length;
+        }, 0),
+        imagesFound: reviewData.filter(item => item.extractedData?.imageUrl).length,
+        avgConfidence: reviewData.length > 0 
+          ? reviewData.reduce((sum, item) => sum + item.analysis.confidence, 0) / reviewData.length 
+          : 0
+      };
+      
+      return res.status(200).json({
+        success: true,
+        data: reviewData,
+        stats: stats
+      });
+      
+    } else if (req.method === 'POST') {
+      // Run full enrichment process
+      const result = await enricher.run();
+      return res.status(200).json(result);
+      
+    } else {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+    
   } catch (error) {
     console.error('Handler error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      success: false,
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 }
 
