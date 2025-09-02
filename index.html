@@ -1470,6 +1470,9 @@
                 }, 100);
             }
         });
+
+        // Drag and drop functionality
+        document.addEventListener('dragover', (e) => {
             e.preventDefault();
             const imageSection = e.target.closest('.image-section');
             if (imageSection) {
