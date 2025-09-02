@@ -1,0 +1,15 @@
+{
+  "functions": {
+    "api/enrichment.js": { "maxDuration": 300 },
+    "api/apply-changes.js": { "maxDuration": 60 },
+    "api/upload-image.js": { "maxDuration": 120 },
+    "api/add-image-url.js": { "maxDuration": 60 },
+    "api/cron-test.js": { "maxDuration": 30 }
+  },
+  "crons": [
+    {
+      "path": "/api/enrichment",
+      "schedule": "0 9 * * 1"
+    }
+  ]
+}

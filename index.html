@@ -1,0 +1,1564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Enrichment Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        
+        .header h1 {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2.5em;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 25px;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover { transform: translateY(-5px); }
+        
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 0.9em;
+        }
+        
+        .controls {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+            color: #333;
+        }
+        
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(132, 250, 176, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .recipe-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            margin-bottom: 30px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            transition: transform 0.3s ease;
+        }
+        
+        .recipe-card:hover { transform: translateY(-3px); }
+        
+        .recipe-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .recipe-title {
+            font-size: 1.4em;
+            font-weight: 600;
+            margin: 0;
+        }
+        
+        .confidence-badge {
+            padding: 8px 16px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+        
+        .recipe-body {
+            padding: 30px;
+        }
+        
+        .recipe-info {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+        
+        .recipe-details p {
+            margin-bottom: 10px;
+            color: #555;
+        }
+        
+        .recipe-details strong { color: #333; }
+        
+        /* Image Upload Section */
+        .image-section {
+            position: relative;
+            width: 200px;
+            height: 150px;
+            border: 3px dashed #ddd;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+        }
+        
+        .image-section:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+        
+        .image-section.has-image {
+            border: none;
+            padding: 0;
+        }
+        
+        .recipe-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 12px;
+        }
+        
+        .image-placeholder {
+            text-align: center;
+            color: #999;
+            font-size: 0.9em;
+        }
+        
+        .image-overlay {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            display: none;
+            gap: 5px;
+        }
+        
+        .image-section:hover .image-overlay { display: flex; }
+        
+        .image-btn {
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 20px;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        
+        .image-btn:hover {
+            background: white;
+            transform: scale(1.1);
+        }
+        
+        /* Image Modal Styles */
+        .image-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .image-modal-content {
+            background: white;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+        
+        .image-modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .image-modal-header h3 {
+            margin: 0;
+            font-size: 1.3em;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5em;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 50%;
+            transition: all 0.2s;
+        }
+        
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .image-modal-body {
+            padding: 25px;
+        }
+        
+        .image-option {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            border: 2px solid #f0f0f0;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 15px;
+        }
+        
+        .image-option:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .option-icon {
+            font-size: 1.5em;
+            width: 40px;
+            text-align: center;
+        }
+        
+        .option-text h4 {
+            margin: 0 0 5px 0;
+            color: #333;
+            font-size: 1em;
+        }
+        
+        .option-text p {
+            margin: 0;
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .url-input-section {
+            margin-top: 15px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+        }
+        
+        .url-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 15px;
+            transition: all 0.2s;
+        }
+        
+        .url-input:focus {
+            border-color: #667eea;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .url-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .image-preview {
+            margin-top: 15px;
+            text-align: center;
+        }
+        
+        .preview-img {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Editable Fields */
+        .editable-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .editable-section:hover {
+            border-color: #e9ecef;
+        }
+        
+        .editable-section.editing {
+            border-color: #667eea;
+            background: #fff;
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .section-title {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #333;
+            margin: 0;
+        }
+        
+        .edit-toggle {
+            background: none;
+            border: none;
+            color: #667eea;
+            cursor: pointer;
+            font-size: 0.9em;
+            padding: 5px 10px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+        
+        .edit-toggle:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+        
+        .field-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .field {
+            margin-bottom: 20px;
+        }
+        
+        .field-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .field-input, .field-select, .field-textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+            background: white;
+        }
+        
+        .field-input:focus, .field-select:focus, .field-textarea:focus {
+            border-color: #667eea;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .field-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            min-height: 44px;
+            padding: 8px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            background: white;
+            cursor: text;
+        }
+        
+        .field-tags:focus-within {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .tag {
+            background: #667eea;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .tag-remove {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+        }
+        
+        .tag-input {
+            border: none;
+            outline: none;
+            padding: 6px;
+            flex: 1;
+            min-width: 120px;
+            font-size: 14px;
+        }
+        
+        .suggestions {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 6px;
+            font-size: 0.9em;
+            color: #666;
+        }
+        
+        .suggestion-label {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .recipe-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            padding-top: 25px;
+            border-top: 2px solid #f0f0f0;
+            flex-wrap: wrap;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: white;
+        }
+        
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: white;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .alert {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #51cf66;
+        }
+        
+        .alert.error { border-left-color: #ff6b6b; }
+        
+        .progress-bar {
+            background: #e9ecef;
+            border-radius: 10px;
+            height: 6px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        /* Hidden file input */
+        .file-input {
+            display: none;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .recipe-info { grid-template-columns: 1fr; }
+            .image-section { width: 100%; height: 200px; }
+            .field-group { grid-template-columns: 1fr; }
+            .controls { flex-direction: column; align-items: stretch; }
+            .recipe-actions { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🍽️ Recipe Dashboard</h1>
+            <p>AI-powered recipe enrichment with manual editing capabilities</p>
+        </div>
+
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <span class="stat-number" id="totalRecipes">-</span>
+                <span class="stat-label">Recipes to Review</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="totalSuggestions">-</span>
+                <span class="stat-label">AI Suggestions</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="imagesFound">-</span>
+                <span class="stat-label">Images Found</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="avgConfidence">-%</span>
+                <span class="stat-label">Avg Confidence</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" onclick="loadData()">🔄 Refresh Data</button>
+            <button class="btn btn-primary" onclick="runEnrichment()">🤖 Run AI Analysis</button>
+            <button class="btn btn-success" onclick="openNotion()">📝 Open Notion</button>
+            <select id="filterSelect" onchange="filterRecipes()">
+                <option value="all">All Recipes</option>
+                <option value="high">High Confidence</option>
+                <option value="medium">Medium Confidence</option>
+                <option value="low">Low Confidence</option>
+            </select>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Loading recipe suggestions...</p>
+        </div>
+
+        <div id="alert" class="alert" style="display: none;"></div>
+
+        <div id="recipeContainer"></div>
+
+        <div id="emptyState" class="empty-state" style="display: none;">
+            <h3>🎉 All Set!</h3>
+            <p>No recipes need enrichment right now.</p>
+        </div>
+    </div>
+
+    <script>
+        let reviewData = [];
+        let filteredData = [];
+        const NOTION_DATABASE_URL = 'https://www.notion.so/1b1ea313dfba4618915c4574ad7ed576';
+
+        // Available options for dropdowns
+        const MEAL_OPTIONS = ["Main Dish", "Side Dish", "Breakfast", "Dessert", "Snack", "Beverage"];
+        const CUISINE_OPTIONS = ["African", "American", "Asian", "Brazilian", "Chinese", "Dessert", "French", "German", "Greek", "Hungarian", "Indian", "Italian", "Japanese", "Korean", "Mediterranean", "Mexican", "Middle Eastern", "Persian", "Peruvian", "Spanish", "Thai", "Vietnamese"];
+        const TAG_OPTIONS = ["Appetizer", "Baked", "Braised", "Breakfast", "Chocolate", "Citrusy", "Condiment", "Creamy", "Curry", "Drink", "Eggs", "Fish", "Grilled", "Herby", "No Bake", "Pasta", "Pickled", "Refreshing", "Roasted", "Salad", "Sandwich", "Savory", "Seafood", "Soup", "Spicy", "Steamed", "Stew", "Stir-Fry", "Sweet", "Tangy", "Traditional", "Vegan", "Vegetarian"];
+        const INGREDIENT_OPTIONS = ["Beef", "Chicken", "Pork", "Fish", "Salmon", "Shrimp", "Eggs", "Cheese", "Pasta", "Rice", "Bread", "Potato", "Tomato", "Onions", "Garlic", "Spinach", "Broccoli", "Carrot", "Mushrooms", "Peppers", "Lemon", "Basil", "Herbs", "Ginger", "Chili", "Beans", "Cream", "Milk"];
+
+        document.addEventListener('DOMContentLoaded', loadData);
+
+        async function loadData() {
+            showLoading(true);
+            hideAlert();
+
+            try {
+                const response = await fetch('/api/enrichment');
+                const result = await response.json();
+                
+                if (result.success) {
+                    reviewData = result.data || [];
+                    updateStats(result.stats);
+                    processData();
+                } else {
+                    showAlert('Error loading data: ' + result.error, 'error');
+                }
+            } catch (error) {
+                console.error('Load error:', error);
+                showAlert('Failed to load recipe data. Please try again.', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function runEnrichment() {
+            showLoading(true, 'Running AI analysis...');
+            
+            try {
+                const response = await fetch('/api/enrichment', { method: 'POST' });
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert(`✅ Successfully processed ${result.processed} recipes!`, 'success');
+                    await loadData();
+                } else {
+                    showAlert('Error: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showAlert('Failed to run AI analysis. Please try again.', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function updateStats(stats) {
+            if (!stats) return;
+            
+            document.getElementById('totalRecipes').textContent = stats.totalRecipes;
+            document.getElementById('totalSuggestions').textContent = stats.totalSuggestions;
+            document.getElementById('imagesFound').textContent = stats.imagesFound;
+            document.getElementById('avgConfidence').textContent = Math.round(stats.avgConfidence * 100) + '%';
+        }
+
+        function processData() {
+            filteredData = [...reviewData];
+            renderRecipes();
+            
+            if (reviewData.length === 0) {
+                document.getElementById('emptyState').style.display = 'block';
+                document.getElementById('recipeContainer').style.display = 'none';
+            } else {
+                document.getElementById('emptyState').style.display = 'none';
+                document.getElementById('recipeContainer').style.display = 'block';
+            }
+        }
+
+        function renderRecipes() {
+            const container = document.getElementById('recipeContainer');
+            
+            if (filteredData.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>No recipes match the filter</h3></div>';
+                return;
+            }
+
+            container.innerHTML = filteredData.map(createRecipeCard).join('');
+        }
+
+        function createRecipeCard(item) {
+            const confidence = item.analysis.confidence;
+            const confidenceText = Math.round(confidence * 100) + '%';
+
+            return `
+                <div class="recipe-card" data-recipe-id="${item.recipe.id}">
+                    <div class="recipe-header">
+                        <h3 class="recipe-title">${item.recipe.name}</h3>
+                        <span class="confidence-badge">${confidenceText}</span>
+                    </div>
+                    <div class="recipe-body">
+                        <div class="recipe-info">
+                            <div class="recipe-details">
+                                <p><strong>Source:</strong> <a href="${item.recipe.link}" target="_blank">${getDomain(item.recipe.link)}</a></p>
+                                <p><strong>AI Reasoning:</strong> ${item.analysis.reasoning}</p>
+                            </div>
+                            ${createImageSection(item)}
+                        </div>
+                        
+                        ${createEditableSection(item)}
+                        
+                        <div class="recipe-actions">
+                            <button class="btn btn-primary" onclick="openRecipe('${item.recipe.url}')">📝 Edit in Notion</button>
+                            <button class="btn btn-success" onclick="saveChanges('${item.recipe.id}')">💾 Save Changes</button>
+                            <button class="btn btn-primary" onclick="resetFields('${item.recipe.id}')">🔄 Reset to Suggestions</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createImageSection(item) {
+            const hasImage = item.extractedData?.imageUrl || item.recipe.current_image;
+            const imageUrl = item.extractedData?.imageUrl || item.recipe.current_image;
+
+            return `
+                <div class="image-section ${hasImage ? 'has-image' : ''}" onclick="showImageOptions('${item.recipe.id}')">
+                    ${hasImage ? `
+                        <img src="${imageUrl}" alt="Recipe" class="recipe-image" onerror="this.parentElement.innerHTML='<div class=\\"image-placeholder\\">Image failed to load<br>Click to add new image</div>'">
+                        <div class="image-overlay">
+                            <button class="image-btn" onclick="event.stopPropagation(); showImageOptions('${item.recipe.id}')" title="Change image">📷</button>
+                            <button class="image-btn" onclick="event.stopPropagation(); pasteImageUrl('${item.recipe.id}')" title="Paste URL">🔗</button>
+                            <button class="image-btn" onclick="event.stopPropagation(); removeImage('${item.recipe.id}')" title="Remove image">❌</button>
+                        </div>
+                    ` : `
+                        <div class="image-placeholder">
+                            📷<br>Upload, paste URL, or drag & drop<br>
+                            <small style="color: #999; font-size: 0.8em;">Click for options</small>
+                        </div>
+                    `}
+                    <input type="file" class="file-input" id="imageInput-${item.recipe.id}" accept="image/*" onchange="handleImageUpload(event, '${item.recipe.id}')">
+                </div>
+                
+                <!-- Image Options Modal -->
+                <div class="image-modal" id="imageModal-${item.recipe.id}" style="display: none;">
+                    <div class="image-modal-content">
+                        <div class="image-modal-header">
+                            <h3>Add Image</h3>
+                            <button class="modal-close" onclick="closeImageModal('${item.recipe.id}')">&times;</button>
+                        </div>
+                        <div class="image-modal-body">
+                            <div class="image-option" onclick="triggerImageUpload('${item.recipe.id}')">
+                                <div class="option-icon">📁</div>
+                                <div class="option-text">
+                                    <h4>Upload File</h4>
+                                    <p>Choose an image file from your computer</p>
+                                </div>
+                            </div>
+                            
+                            <div class="image-option" onclick="showUrlInput('${item.recipe.id}')">
+                                <div class="option-icon">🔗</div>
+                                <div class="option-text">
+                                    <h4>Paste Image URL</h4>
+                                    <p>Add an image from a web link</p>
+                                </div>
+                            </div>
+                            
+                            <div class="url-input-section" id="urlInput-${item.recipe.id}" style="display: none;">
+                                <input type="url" class="url-input" placeholder="Paste image URL here..." id="urlField-${item.recipe.id}" 
+                                       onkeydown="if(event.key==='Enter') addImageFromUrl('${item.recipe.id}'); if(event.key==='Escape') hideUrlInput('${item.recipe.id}')">
+                                <div class="url-buttons">
+                                    <button class="btn btn-success" onclick="addImageFromUrl('${item.recipe.id}')">Add Image</button>
+                                    <button class="btn btn-secondary" onclick="hideUrlInput('${item.recipe.id}')">Cancel</button>
+                                </div>
+                                <small style="color: #666; font-size: 0.8em;">
+                                    💡 Tip: Press Enter to add, Escape to cancel. Works with URLs from Google Images, Unsplash, imgur, etc.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createEditableSection(item) {
+            const current = item.recipe;
+            const suggested = item.analysis;
+
+            return `
+                <div class="editable-section" id="editable-${item.recipe.id}">
+                    <div class="section-header">
+                        <h4 class="section-title">Recipe Details</h4>
+                        <button class="edit-toggle" onclick="toggleEdit('${item.recipe.id}')">✏️ Edit</button>
+                    </div>
+                    
+                    <div class="field-group">
+                        ${createFieldWithSuggestion('Title', 'title', 'text', current.name, suggested.standardized_title, item.recipe.id)}
+                        ${createFieldWithSuggestion('Meal Type', 'meal', 'select', current.current_meal, suggested.meal, item.recipe.id, MEAL_OPTIONS)}
+                        ${createFieldWithSuggestion('Cuisine', 'cuisine', 'select', current.current_cuisine, suggested.cuisine, item.recipe.id, CUISINE_OPTIONS)}
+                        ${createTagFieldWithSuggestion('Tags', 'tags', current.current_tags, suggested.tags, item.recipe.id, TAG_OPTIONS)}
+                        ${createTagFieldWithSuggestion('Key Ingredients', 'ingredients', current.current_ingredients, suggested.key_ingredients, item.recipe.id, INGREDIENT_OPTIONS)}
+                    </div>
+                </div>
+            `;
+        }
+
+        function createFieldWithSuggestion(label, fieldName, type, currentValue, suggestedValue, recipeId, options = null) {
+            const hasValue = currentValue && currentValue !== 'Empty';
+            const hasSuggestion = suggestedValue && suggestedValue !== currentValue;
+            
+            let inputHtml = '';
+            if (type === 'text') {
+                inputHtml = `<input type="text" class="field-input" id="${fieldName}-${recipeId}" value="${hasValue ? currentValue : (suggestedValue || '')}" readonly>`;
+            } else if (type === 'select') {
+                const selectedValue = hasValue ? currentValue : (suggestedValue || '');
+                inputHtml = `
+                    <select class="field-select" id="${fieldName}-${recipeId}" disabled>
+                        <option value="">Not Set</option>
+                        ${options.map(opt => `<option value="${opt}" ${opt === selectedValue ? 'selected' : ''}>${opt}</option>`).join('')}
+                    </select>
+                `;
+            }
+
+            return `
+                <div class="field">
+                    <label class="field-label">${label}</label>
+                    ${inputHtml}
+                    ${hasSuggestion ? `
+                        <div class="suggestions">
+                            <div class="suggestion-label">AI Suggests:</div>
+                            ${suggestedValue}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function createTagFieldWithSuggestion(label, fieldName, currentValue, suggestedValue, recipeId, options) {
+            const currentTags = currentValue || [];
+            const suggestedTags = suggestedValue || [];
+            const displayTags = currentTags.length > 0 ? currentTags : suggestedTags;
+            
+            return `
+                <div class="field">
+                    <label class="field-label">${label}</label>
+                    <div class="field-tags" id="${fieldName}-${recipeId}" onclick="focusTagInput('${fieldName}-${recipeId}')">
+                        ${displayTags.map(tag => `
+                            <span class="tag">
+                                ${tag}
+                                <button class="tag-remove" onclick="removeTag('${fieldName}-${recipeId}', '${tag}')" disabled>×</button>
+                            </span>
+                        `).join('')}
+                        <input type="text" class="tag-input" placeholder="Add ${label.toLowerCase()}..." onkeydown="handleTagInput(event, '${fieldName}-${recipeId}')" readonly>
+                    </div>
+                    ${suggestedTags.length > 0 && currentTags.length === 0 ? `
+                        <div class="suggestions">
+                            <div class="suggestion-label">AI Suggests:</div>
+                            ${suggestedTags.join(', ')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function toggleEdit(recipeId) {
+            const section = document.getElementById(`editable-${recipeId}`);
+            const isEditing = section.classList.contains('editing');
+            
+            if (isEditing) {
+                // Stop editing
+                section.classList.remove('editing');
+                section.querySelector('.edit-toggle').textContent = '✏️ Edit';
+                
+                // Make fields readonly
+                section.querySelectorAll('.field-input, .field-select').forEach(field => {
+                    field.readOnly = true;
+                    field.disabled = true;
+                });
+                section.querySelectorAll('.tag-input').forEach(input => input.readOnly = true);
+                section.querySelectorAll('.tag-remove').forEach(btn => btn.disabled = true);
+                
+            } else {
+                // Start editing
+                section.classList.add('editing');
+                section.querySelector('.edit-toggle').textContent = '💾 Done Editing';
+                
+                // Make fields editable
+                section.querySelectorAll('.field-input, .field-select').forEach(field => {
+                    field.readOnly = false;
+                    field.disabled = false;
+                });
+                section.querySelectorAll('.tag-input').forEach(input => input.readOnly = false);
+                section.querySelectorAll('.tag-remove').forEach(btn => btn.disabled = false);
+            }
+        }
+
+        function focusTagInput(fieldId) {
+            const field = document.getElementById(fieldId);
+            const input = field.querySelector('.tag-input');
+            input.focus();
+        }
+
+        function handleTagInput(event, fieldId) {
+            if (event.key === 'Enter' || event.key === ',') {
+                event.preventDefault();
+                const input = event.target;
+                const tag = input.value.trim();
+                
+                if (tag && !tagExists(fieldId, tag)) {
+                    addTag(fieldId, tag);
+                    input.value = '';
+                }
+            } else if (event.key === 'Backspace' && event.target.value === '') {
+                // Remove last tag on backspace
+                const field = document.getElementById(fieldId);
+                const tags = field.querySelectorAll('.tag');
+                if (tags.length > 0) {
+                    const lastTag = tags[tags.length - 1];
+                    const tagText = lastTag.textContent.replace('×', '').trim();
+                    removeTag(fieldId, tagText);
+                }
+            }
+        }
+
+        function tagExists(fieldId, tag) {
+            const field = document.getElementById(fieldId);
+            const existingTags = Array.from(field.querySelectorAll('.tag')).map(el => 
+                el.textContent.replace('×', '').trim()
+            );
+            return existingTags.includes(tag);
+        }
+
+        function addTag(fieldId, tag) {
+            const field = document.getElementById(fieldId);
+            const input = field.querySelector('.tag-input');
+            
+            const tagEl = document.createElement('span');
+            tagEl.className = 'tag';
+            tagEl.innerHTML = `
+                ${tag}
+                <button class="tag-remove" onclick="removeTag('${fieldId}', '${tag}')">×</button>
+            `;
+            
+            field.insertBefore(tagEl, input);
+        }
+
+        function removeTag(fieldId, tag) {
+            const field = document.getElementById(fieldId);
+            const tags = field.querySelectorAll('.tag');
+            
+            tags.forEach(tagEl => {
+                if (tagEl.textContent.replace('×', '').trim() === tag) {
+                    tagEl.remove();
+                }
+            });
+        }
+
+        function resetFields(recipeId) {
+            const recipe = reviewData.find(item => item.recipe.id === recipeId);
+            if (!recipe) return;
+            
+            const analysis = recipe.analysis;
+            
+            // Reset title
+            const titleField = document.getElementById(`title-${recipeId}`);
+            if (titleField) titleField.value = analysis.standardized_title || recipe.recipe.name;
+            
+            // Reset meal
+            const mealField = document.getElementById(`meal-${recipeId}`);
+            if (mealField) mealField.value = analysis.meal || '';
+            
+            // Reset cuisine
+            const cuisineField = document.getElementById(`cuisine-${recipeId}`);
+            if (cuisineField) cuisineField.value = analysis.cuisine || '';
+            
+            // Reset tags
+            const tagsField = document.getElementById(`tags-${recipeId}`);
+            if (tagsField && analysis.tags) {
+                // Clear existing tags
+                tagsField.querySelectorAll('.tag').forEach(tag => tag.remove());
+                // Add suggested tags
+                analysis.tags.forEach(tag => addTag(`tags-${recipeId}`, tag));
+            }
+            
+            // Reset ingredients
+            const ingredientsField = document.getElementById(`ingredients-${recipeId}`);
+            if (ingredientsField && analysis.key_ingredients) {
+                ingredientsField.querySelectorAll('.tag').forEach(tag => tag.remove());
+                analysis.key_ingredients.forEach(ing => addTag(`ingredients-${recipeId}`, ing));
+            }
+            
+            showAlert('✅ Fields reset to AI suggestions!', 'success');
+        }
+
+        function showImageOptions(recipeId) {
+            const modal = document.getElementById(`imageModal-${recipeId}`);
+            modal.style.display = 'flex';
+            
+            // Reset URL input
+            hideUrlInput(recipeId);
+        }
+
+        function closeImageModal(recipeId) {
+            const modal = document.getElementById(`imageModal-${recipeId}`);
+            modal.style.display = 'none';
+            hideUrlInput(recipeId);
+        }
+
+        function showUrlInput(recipeId) {
+            const urlSection = document.getElementById(`urlInput-${recipeId}`);
+            const urlField = document.getElementById(`urlField-${recipeId}`);
+            
+            urlSection.style.display = 'block';
+            urlField.focus();
+        }
+
+        function hideUrlInput(recipeId) {
+            const urlSection = document.getElementById(`urlInput-${recipeId}`);
+            const urlField = document.getElementById(`urlField-${recipeId}`);
+            
+            urlSection.style.display = 'none';
+            urlField.value = '';
+            
+            // Remove any preview
+            const preview = urlSection.querySelector('.image-preview');
+            if (preview) preview.remove();
+        }
+
+        function pasteImageUrl(recipeId) {
+            showImageOptions(recipeId);
+            setTimeout(() => showUrlInput(recipeId), 100);
+        }
+
+        async function addImageFromUrl(recipeId) {
+            const urlField = document.getElementById(`urlField-${recipeId}`);
+            const imageUrl = urlField.value.trim();
+            
+            if (!imageUrl) {
+                showAlert('❌ Please enter an image URL', 'error');
+                return;
+            }
+            
+            // Validate URL format
+            if (!isValidImageUrl(imageUrl)) {
+                showAlert('❌ Please enter a valid image URL', 'error');
+                return;
+            }
+            
+            try {
+                showAlert('🔗 Adding image from URL...', 'info');
+                
+                // Test if image loads
+                const testImg = new Image();
+                testImg.crossOrigin = 'anonymous';
+                
+                testImg.onload = async () => {
+                    try {
+                        // Send URL to backend to add to Notion
+                        const response = await fetch('/api/add-image-url', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                recipeId: recipeId,
+                                imageUrl: imageUrl
+                            })
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            // Update image display
+                            updateImageDisplay(recipeId, imageUrl);
+                            closeImageModal(recipeId);
+                            showAlert('✅ Image added successfully!', 'success');
+                            
+                            // Update recipe data
+                            const recipe = reviewData.find(item => item.recipe.id === recipeId);
+                            if (recipe) {
+                                recipe.recipe.current_image = imageUrl;
+                            }
+                            
+                        } else {
+                            showAlert('❌ Failed to add image: ' + result.error, 'error');
+                        }
+                        
+                    } catch (error) {
+                        console.error('Error adding image URL:', error);
+                        showAlert('❌ Failed to add image. Please try again.', 'error');
+                    }
+                };
+                
+                testImg.onerror = () => {
+                    showAlert('❌ Could not load image from URL. Please check the link.', 'error');
+                };
+                
+                // Show preview while loading
+                showImagePreview(recipeId, imageUrl);
+                testImg.src = imageUrl;
+                
+            } catch (error) {
+                console.error('URL validation error:', error);
+                showAlert('❌ Invalid image URL. Please try again.', 'error');
+            }
+        }
+
+        function isValidImageUrl(url) {
+            try {
+                const urlObj = new URL(url);
+                
+                // Check if it's a valid HTTP/HTTPS URL
+                if (!['http:', 'https:'].includes(urlObj.protocol)) {
+                    return false;
+                }
+                
+                // Check for common image extensions
+                const pathname = urlObj.pathname.toLowerCase();
+                const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp'];
+                
+                // URL doesn't need to end with extension (many CDNs don't show it)
+                // But if it does have an extension, it should be an image
+                const hasExtension = imageExtensions.some(ext => pathname.includes(ext));
+                const hasImageIndicator = pathname.includes('image') || pathname.includes('img') || 
+                                         url.includes('cdn') || url.includes('imgur') || 
+                                         url.includes('unsplash') || url.includes('pexels');
+                
+                return hasExtension || hasImageIndicator || pathname === '/' || !pathname.includes('.');
+                
+            } catch (error) {
+                return false;
+            }
+        }
+
+        function showImagePreview(recipeId, imageUrl) {
+            const urlSection = document.getElementById(`urlInput-${recipeId}`);
+            
+            // Remove existing preview
+            const existingPreview = urlSection.querySelector('.image-preview');
+            if (existingPreview) existingPreview.remove();
+            
+            // Add new preview
+            const preview = document.createElement('div');
+            preview.className = 'image-preview';
+            preview.innerHTML = `
+                <p style="margin-bottom: 10px; color: #666;">Preview:</p>
+                <img src="${imageUrl}" alt="Preview" class="preview-img" 
+                     onerror="this.parentElement.innerHTML='<p style=\\"color: #ff6b6b;\\">Failed to load image preview</p>'">
+            `;
+            
+            urlSection.appendChild(preview);
+        }
+
+        function updateImageDisplay(recipeId, imageUrl) {
+            const imageSection = document.querySelector(`[data-recipe-id="${recipeId}"] .image-section`);
+            imageSection.classList.add('has-image');
+            imageSection.innerHTML = `
+                <img src="${imageUrl}" alt="Recipe" class="recipe-image">
+                <div class="image-overlay">
+                    <button class="image-btn" onclick="event.stopPropagation(); showImageOptions('${recipeId}')" title="Change image">📷</button>
+                    <button class="image-btn" onclick="event.stopPropagation(); pasteImageUrl('${recipeId}')" title="Paste URL">🔗</button>
+                    <button class="image-btn" onclick="event.stopPropagation(); removeImage('${recipeId}')" title="Remove image">❌</button>
+                </div>
+                <input type="file" class="file-input" id="imageInput-${recipeId}" accept="image/*" onchange="handleImageUpload(event, '${recipeId}')">
+                
+                <!-- Image Options Modal -->
+                <div class="image-modal" id="imageModal-${recipeId}" style="display: none;">
+                    <div class="image-modal-content">
+                        <div class="image-modal-header">
+                            <h3>Add Image</h3>
+                            <button class="modal-close" onclick="closeImageModal('${recipeId}')">&times;</button>
+                        </div>
+                        <div class="image-modal-body">
+                            <div class="image-option" onclick="triggerImageUpload('${recipeId}')">
+                                <div class="option-icon">📁</div>
+                                <div class="option-text">
+                                    <h4>Upload File</h4>
+                                    <p>Choose an image file from your computer</p>
+                                </div>
+                            </div>
+                            
+                            <div class="image-option" onclick="showUrlInput('${recipeId}')">
+                                <div class="option-icon">🔗</div>
+                                <div class="option-text">
+                                    <h4>Paste Image URL</h4>
+                                    <p>Add an image from a web link</p>
+                                </div>
+                            </div>
+                            
+                            <div class="url-input-section" id="urlInput-${recipeId}" style="display: none;">
+                                <input type="url" class="url-input" placeholder="Paste image URL here..." id="urlField-${recipeId}">
+                                <div class="url-buttons">
+                                    <button class="btn btn-success" onclick="addImageFromUrl('${recipeId}')">Add Image</button>
+                                    <button class="btn btn-secondary" onclick="hideUrlInput('${recipeId}')">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function triggerImageUpload(recipeId) {
+            closeImageModal(recipeId);
+            document.getElementById(`imageInput-${recipeId}`).click();
+        }
+
+        async function handleImageUpload(event, recipeId) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            // Validate file type
+            if (!file.type.startsWith('image/')) {
+                showAlert('❌ Please select an image file', 'error');
+                return;
+            }
+            
+            // Validate file size (5MB limit)
+            if (file.size > 5 * 1024 * 1024) {
+                showAlert('❌ Image too large. Please select an image under 5MB', 'error');
+                return;
+            }
+            
+            try {
+                showAlert('📤 Uploading image...', 'info');
+                
+                // Create FormData for upload
+                const formData = new FormData();
+                formData.append('image', file);
+                formData.append('recipeId', recipeId);
+                
+                const response = await fetch('/api/upload-image', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Update image display
+                    const imageSection = event.target.closest('.image-section');
+                    imageSection.classList.add('has-image');
+                    imageSection.innerHTML = `
+                        <img src="${result.imageUrl}" alt="Recipe" class="recipe-image">
+                        <div class="image-overlay">
+                            <button class="image-btn" onclick="event.stopPropagation(); triggerImageUpload('${recipeId}')" title="Change image">📷</button>
+                            <button class="image-btn" onclick="event.stopPropagation(); removeImage('${recipeId}')" title="Remove image">❌</button>
+                        </div>
+                        <input type="file" class="file-input" id="imageInput-${recipeId}" accept="image/*" onchange="handleImageUpload(event, '${recipeId}')">
+                    `;
+                    
+                    showAlert('✅ Image uploaded successfully!', 'success');
+                    
+                    // Update the recipe data
+                    const recipe = reviewData.find(item => item.recipe.id === recipeId);
+                    if (recipe) {
+                        recipe.recipe.current_image = result.imageUrl;
+                    }
+                    
+                } else {
+                    showAlert('❌ Failed to upload image: ' + result.error, 'error');
+                }
+                
+            } catch (error) {
+                console.error('Upload error:', error);
+                showAlert('❌ Image upload failed. Please try again.', 'error');
+            }
+        }
+
+        function removeImage(recipeId) {
+            if (!confirm('Remove this image?')) return;
+            
+            const imageSection = document.querySelector(`[data-recipe-id="${recipeId}"] .image-section`);
+            imageSection.classList.remove('has-image');
+            imageSection.innerHTML = `
+                <div class="image-placeholder">
+                    📷<br>Click to upload image<br>or drag & drop
+                </div>
+                <input type="file" class="file-input" id="imageInput-${recipeId}" accept="image/*" onchange="handleImageUpload(event, '${recipeId}')">
+            `;
+            
+            // Update recipe data
+            const recipe = reviewData.find(item => item.recipe.id === recipeId);
+            if (recipe) {
+                recipe.recipe.current_image = null;
+            }
+            
+            showAlert('✅ Image removed', 'success');
+        }
+
+        async function saveChanges(recipeId) {
+            const recipe = reviewData.find(item => item.recipe.id === recipeId);
+            if (!recipe) return;
+            
+            try {
+                showAlert('💾 Saving changes...', 'info');
+                
+                // Collect form data
+                const changes = {
+                    title: document.getElementById(`title-${recipeId}`)?.value,
+                    meal: document.getElementById(`meal-${recipeId}`)?.value,
+                    cuisine: document.getElementById(`cuisine-${recipeId}`)?.value,
+                    tags: collectTags(`tags-${recipeId}`),
+                    key_ingredients: collectTags(`ingredients-${recipeId}`),
+                    image: recipe.recipe.current_image
+                };
+                
+                // Remove empty values
+                Object.keys(changes).forEach(key => {
+                    if (!changes[key] || (Array.isArray(changes[key]) && changes[key].length === 0)) {
+                        delete changes[key];
+                    }
+                });
+                
+                const response = await fetch('/api/apply-changes', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        recipeId: recipeId,
+                        changes: changes
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert('✅ Changes saved to Notion!', 'success');
+                    
+                    // Update local data
+                    Object.assign(recipe.recipe, {
+                        name: changes.title || recipe.recipe.name,
+                        current_meal: changes.meal || recipe.recipe.current_meal,
+                        current_cuisine: changes.cuisine || recipe.recipe.current_cuisine,
+                        current_tags: changes.tags || recipe.recipe.current_tags,
+                        current_ingredients: changes.key_ingredients || recipe.recipe.current_ingredients
+                    });
+                    
+                    // Remove from incomplete list after successful save
+                    setTimeout(() => {
+                        reviewData = reviewData.filter(item => item.recipe.id !== recipeId);
+                        processData();
+                        showAlert('✅ Recipe completed and removed from review list!', 'success');
+                    }, 2000);
+                    
+                } else {
+                    showAlert('❌ Failed to save: ' + result.error, 'error');
+                }
+                
+            } catch (error) {
+                console.error('Save error:', error);
+                showAlert('❌ Save failed. Please try again.', 'error');
+            }
+        }
+
+        function collectTags(fieldId) {
+            const field = document.getElementById(fieldId);
+            if (!field) return [];
+            
+            return Array.from(field.querySelectorAll('.tag')).map(tag => 
+                tag.textContent.replace('×', '').trim()
+            );
+        }
+
+        // Keyboard event handlers
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                // Close any open image modals
+                const openModals = document.querySelectorAll('.image-modal[style*="display: flex"]');
+                openModals.forEach(modal => {
+                    const recipeId = modal.id.replace('imageModal-', '');
+                    closeImageModal(recipeId);
+                });
+            }
+        });
+
+        // Click outside modal to close
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('image-modal')) {
+                const recipeId = e.target.id.replace('imageModal-', '');
+                closeImageModal(recipeId);
+            }
+        });
+
+        // Auto-detect and validate URLs when pasted
+        document.addEventListener('paste', (e) => {
+            const activeElement = document.activeElement;
+            if (activeElement && activeElement.classList.contains('url-input')) {
+                setTimeout(() => {
+                    const url = activeElement.value.trim();
+                    if (url && isValidImageUrl(url)) {
+                        // Show instant preview for valid URLs
+                        const recipeId = activeElement.id.replace('urlField-', '');
+                        showImagePreview(recipeId, url);
+                    }
+                }, 100);
+            }
+        });
+            e.preventDefault();
+            const imageSection = e.target.closest('.image-section');
+            if (imageSection) {
+                imageSection.style.borderColor = '#667eea';
+                imageSection.style.background = '#f0f4ff';
+            }
+        });
+
+        document.addEventListener('dragleave', (e) => {
+            const imageSection = e.target.closest('.image-section');
+            if (imageSection) {
+                imageSection.style.borderColor = '#ddd';
+                imageSection.style.background = '#f8f9fa';
+            }
+        });
+
+        document.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const imageSection = e.target.closest('.image-section');
+            if (imageSection) {
+                imageSection.style.borderColor = '#ddd';
+                imageSection.style.background = '#f8f9fa';
+                
+                const recipeId = imageSection.closest('.recipe-card').dataset.recipeId;
+                const files = e.dataTransfer.files;
+                
+                if (files.length > 0 && files[0].type.startsWith('image/')) {
+                    const input = imageSection.querySelector('.file-input');
+                    input.files = files;
+                    handleImageUpload({ target: input }, recipeId);
+                }
+            }
+        });
+
+        function filterRecipes() {
+            const filter = document.getElementById('filterSelect').value;
+            
+            if (filter === 'all') {
+                filteredData = [...reviewData];
+            } else if (filter === 'high') {
+                filteredData = reviewData.filter(item => item.analysis.confidence >= 0.8);
+            } else if (filter === 'medium') {
+                filteredData = reviewData.filter(item => 
+                    item.analysis.confidence >= 0.6 && item.analysis.confidence < 0.8);
+            } else if (filter === 'low') {
+                filteredData = reviewData.filter(item => item.analysis.confidence < 0.6);
+            }
+            
+            renderRecipes();
+        }
+
+        function openRecipe(url) {
+            window.open(url, '_blank');
+        }
+
+        function openNotion() {
+            window.open(NOTION_DATABASE_URL, '_blank');
+        }
+
+        function showLoading(show, message = 'Loading...') {
+            const loading = document.getElementById('loading');
+            if (show) {
+                loading.style.display = 'block';
+                loading.querySelector('p').textContent = message;
+            } else {
+                loading.style.display = 'none';
+            }
+        }
+
+        function showAlert(message, type = 'info') {
+            const alert = document.getElementById('alert');
+            alert.style.display = 'block';
+            alert.textContent = message;
+            alert.className = `alert ${type}`;
+            
+            setTimeout(() => hideAlert(), 5000);
+        }
+
+        function hideAlert() {
+            document.getElementById('alert').style.display = 'none';
+        }
+
+        function getDomain(url) {
+            try {
+                return new URL(url).hostname.replace('www.', '');
+            } catch {
+                return url.substring(0, 30) + '...';
+            }
+        }
+    </script>
+</body>
+</html>
