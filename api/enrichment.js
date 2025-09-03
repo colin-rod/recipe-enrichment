@@ -5,11 +5,24 @@ import { Client } from '@notionhq/client';
 import fetch from 'node-fetch';
 import * as cheerio from 'cheerio';
 import nodemailer from 'nodemailer';
+import dotenv from 'dotenv';
 
-// Configuration
+// Ensure environment variables are loaded
+dotenv.config();
+
+// Configuration Constants
+const CONFIG = {
+  MAX_RECIPES_PER_BATCH: 5,
+  DEFAULT_DATABASE_ID: "1b1ea313dfba4618915c4574ad7ed576",
+  AI_DELAY_MS: 1000,
+  MAX_IMAGE_SIZE: 5 * 1024 * 1024, // 5MB
+  TIMEOUT_MS: 30000 // 30 seconds
+};
+
+// Environment Variables
 const NOTION_TOKEN = process.env.NOTION_TOKEN;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const DATABASE_ID = "1b1ea313dfba4618915c4574ad7ed576";
+const DATABASE_ID = process.env.NOTION_DATABASE_ID || CONFIG.DEFAULT_DATABASE_ID;
 const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_PASS;
 const RECIPIENT_EMAIL = process.env.RECIPIENT_EMAIL;
@@ -17,32 +30,40 @@ const RECIPIENT_EMAIL = process.env.RECIPIENT_EMAIL;
 // Initialize clients
 const notion = new Client({ auth: NOTION_TOKEN });
 
-// Enhanced options based on your schema (removed Source and Altered)
-const CUISINE_OPTIONS = [
-  "African", "American", "Asian", "Brazilian", "Chinese", "Dessert", 
-  "French", "German", "Greek", "Hungarian", "Indian", "Italian", 
-  "Japanese", "Korean", "Mediterranean", "Mexican", "Middle Eastern", 
-  "Persian", "Peruvian", "Spanish", "Thai", "Vietnamese"
-];
+// Recipe Options (shared with frontend)
+const RECIPE_OPTIONS = {
+  CUISINE: [
+    "African", "American", "Asian", "Brazilian", "Chinese", "Dessert", 
+    "French", "German", "Greek", "Hungarian", "Indian", "Italian", 
+    "Japanese", "Korean", "Mediterranean", "Mexican", "Middle Eastern", 
+    "Persian", "Peruvian", "Spanish", "Thai", "Vietnamese"
+  ],
+  
+  MEAL: [
+    "Main Dish", "Side Dish", "Breakfast", "Dessert", "Snack", "Beverage"
+  ],
+  
+  TAGS: [
+    "Appetizer", "Baked", "Braised", "Breakfast", "Chocolate", "Citrusy",
+    "Condiment", "Creamy", "Curry", "Drink", "Eggs", "Fish", "Grilled",
+    "Herby", "No Bake", "Pasta", "Pickled", "Refreshing", "Roasted",
+    "Salad", "Sandwich", "Savory", "Seafood", "Soup", "Spicy", "Steamed",
+    "Stew", "Stir-Fry", "Sweet", "Tangy", "Traditional", "Vegan", "Vegetarian"
+  ],
+  
+  INGREDIENTS: [
+    "Beef", "Chicken", "Pork", "Fish", "Salmon", "Shrimp", "Eggs", "Cheese",
+    "Pasta", "Rice", "Bread", "Potato", "Tomato", "Onions", "Garlic",
+    "Spinach", "Broccoli", "Carrot", "Mushrooms", "Peppers", "Lemon",
+    "Basil", "Herbs", "Ginger", "Chili", "Beans", "Cream", "Milk"
+  ]
+};
 
-const MEAL_OPTIONS = [
-  "Main Dish", "Side Dish", "Breakfast", "Dessert", "Snack", "Beverage"
-];
-
-const TAG_OPTIONS = [
-  "Appetizer", "Baked", "Braised", "Breakfast", "Chocolate", "Citrusy",
-  "Condiment", "Creamy", "Curry", "Drink", "Eggs", "Fish", "Grilled",
-  "Herby", "No Bake", "Pasta", "Pickled", "Refreshing", "Roasted",
-  "Salad", "Sandwich", "Savory", "Seafood", "Soup", "Spicy", "Steamed",
-  "Stew", "Stir-Fry", "Sweet", "Tangy", "Traditional", "Vegan", "Vegetarian"
-];
-
-const INGREDIENT_OPTIONS = [
-  "Beef", "Chicken", "Pork", "Fish", "Salmon", "Shrimp", "Eggs", "Cheese",
-  "Pasta", "Rice", "Bread", "Potato", "Tomato", "Onions", "Garlic",
-  "Spinach", "Broccoli", "Carrot", "Mushrooms", "Peppers", "Lemon",
-  "Basil", "Herbs", "Ginger", "Chili", "Beans", "Cream", "Milk"
-];
+// Legacy aliases for backward compatibility
+const CUISINE_OPTIONS = RECIPE_OPTIONS.CUISINE;
+const MEAL_OPTIONS = RECIPE_OPTIONS.MEAL;
+const TAG_OPTIONS = RECIPE_OPTIONS.TAGS;
+const INGREDIENT_OPTIONS = RECIPE_OPTIONS.INGREDIENTS;
 
 class RecipeEnrichmentSystem {
   constructor() {
@@ -78,7 +99,9 @@ class RecipeEnrichmentSystem {
         current_meal: page.properties.Meal?.select?.name,
         current_cuisine: page.properties.Cuisine?.select?.name,
         current_tags: page.properties.Tags?.multi_select?.map(tag => tag.name) || [],
-        current_ingredients: page.properties['Key Ingredients']?.multi_select?.map(ing => ing.name) || []
+        current_ingredients: page.properties['Key Ingredients']?.multi_select?.map(ing => ing.name) || [],
+        // Page content will be loaded separately when needed
+        current_page_content: null
       }));
 
       console.log(`Found ${recipes.length} recipes needing enrichment`);
@@ -113,8 +136,12 @@ class RecipeEnrichmentSystem {
         title: this.extractTitle($),
         ingredients: this.extractIngredients($),
         instructions: this.extractInstructions($),
-        imageUrl: this.extractMainImage($),
-        description: this.extractDescription($)
+        images: this.extractMainImage($), // Now returns array of images
+        description: this.extractDescription($),
+        servings: this.extractServings($),
+        prepTime: this.extractPrepTime($),
+        cookTime: this.extractCookTime($),
+        totalTime: this.extractTotalTime($)
       };
       
       return recipeData;
@@ -181,7 +208,7 @@ class RecipeEnrichmentSystem {
     
     const ingredients = [];
     for (const selector of ingredientSelectors) {
-      $(selector).each((i, el) => {
+      $(selector).each((_, el) => {
         const ingredient = $(el).text().trim();
         if (ingredient) ingredients.push(ingredient);
       });
@@ -202,7 +229,7 @@ class RecipeEnrichmentSystem {
     
     const instructions = [];
     for (const selector of instructionSelectors) {
-      $(selector).each((i, el) => {
+      $(selector).each((_, el) => {
         const instruction = $(el).text().trim();
         if (instruction) instructions.push(instruction);
       });
@@ -212,47 +239,107 @@ class RecipeEnrichmentSystem {
     return instructions;
   }
 
-  // Extract main image
+  // Extract all images from page
   extractMainImage($) {
-    const imageSelectors = [
+    const images = [];
+    const seenUrls = new Set();
+    
+    // Priority selectors for recipe-specific images
+    const prioritySelectors = [
       '.recipe-image img',
       '.post-thumbnail img',
       '.featured-image img',
       '.recipe-card img',
-      'img[class*="recipe"]'
+      'img[class*="recipe"]',
+      '.wp-block-image img',
+      '.entry-content img'
     ];
     
-    for (const selector of imageSelectors) {
-      const img = $(selector).first();
-      if (img.length) {
-        const src = img.attr('src') || img.attr('data-src');
-        if (src && src.startsWith('http')) {
-          return src;
+    // First, try priority selectors
+    for (const selector of prioritySelectors) {
+      $(selector).each((_, elem) => {
+        const img = $(elem);
+        const src = img.attr('src') || img.attr('data-src') || img.attr('data-lazy-src');
+        
+        if (src && this.isValidImageUrl(src) && !seenUrls.has(src)) {
+          seenUrls.add(src);
+          images.push({
+            url: src,
+            alt: img.attr('alt') || '',
+            width: parseInt(img.attr('width')) || null,
+            height: parseInt(img.attr('height')) || null,
+            source: 'priority'
+          });
         }
-      }
+      });
     }
     
-    return null;
+    // If we don't have many images, get all images from the page
+    if (images.length < 5) {
+      $('img').each((i, elem) => {
+        const img = $(elem);
+        const src = img.attr('src') || img.attr('data-src') || img.attr('data-lazy-src');
+        
+        if (src && this.isValidImageUrl(src) && !seenUrls.has(src)) {
+          // Skip obviously non-recipe images
+          const alt = (img.attr('alt') || '').toLowerCase();
+          const srcLower = src.toLowerCase();
+          
+          // Skip common non-recipe images
+          if (alt.includes('logo') || alt.includes('avatar') || alt.includes('profile') ||
+              srcLower.includes('logo') || srcLower.includes('avatar') || 
+              srcLower.includes('profile') || srcLower.includes('icon')) {
+            return;
+          }
+          
+          seenUrls.add(src);
+          images.push({
+            url: src,
+            alt: img.attr('alt') || '',
+            width: parseInt(img.attr('width')) || null,
+            height: parseInt(img.attr('height')) || null,
+            source: 'general'
+          });
+        }
+      });
+    }
+    
+    // Sort by priority (priority source first, then by size if available)
+    images.sort((a, b) => {
+      if (a.source === 'priority' && b.source !== 'priority') return -1;
+      if (b.source === 'priority' && a.source !== 'priority') return 1;
+      
+      // Sort by size (larger images first)
+      const aSize = (a.width || 0) * (a.height || 0);
+      const bSize = (b.width || 0) * (b.height || 0);
+      return bSize - aSize;
+    });
+    
+    // Return array of images or null if none found
+    return images.length > 0 ? images : null;
+  }
+  
+  // Helper method to validate image URLs
+  isValidImageUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    
+    // Must be HTTP/HTTPS
+    if (!url.startsWith('http')) return false;
+    
+    // Should have image extension or be from common image domains
+    const imageExtensions = /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i;
+    const imageDomains = /\.(amazonaws\.com|cloudfront\.net|wp\.com|squarespace\.com|wixstatic\.com|imgbb\.com)/i;
+    
+    return imageExtensions.test(url) || imageDomains.test(url);
   }
 
-  // Extract description
-  extractDescription($) {
-    const descSelectors = [
-      '.recipe-description',
-      '.recipe-summary',
-      '.entry-content p',
-      '.post-content p'
-    ];
-    
-    for (const selector of descSelectors) {
-      const desc = $(selector).first().text().trim();
-      if (desc && desc.length > 50) {
-        return desc.substring(0, 300) + '...';
-      }
-    }
-    
-    return null;
-  }
+
+
+
+
+
+
+
 
   // Use AI to analyze and categorize recipe
   async analyzeRecipeWithAI(recipe, extractedData) {
@@ -260,7 +347,6 @@ class RecipeEnrichmentSystem {
       // Prepare context from extracted data
       const context = extractedData ? `
         Extracted Title: ${extractedData.title || 'N/A'}
-        Description: ${extractedData.description || 'N/A'}
         Sample Ingredients: ${extractedData.ingredients?.slice(0, 10).join(', ') || 'N/A'}
       ` : 'No extracted data available';
 
@@ -308,7 +394,7 @@ class RecipeEnrichmentSystem {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4',
+          model: 'gpt-4o-mini',
           messages: [{ role: 'user', content: prompt }],
           max_tokens: 500,
           temperature: 0.3
@@ -370,19 +456,35 @@ class RecipeEnrichmentSystem {
   async createReviewData(recipes) {
     const reviewItems = [];
     
-    for (const recipe of recipes.slice(0, 10)) { // Process 10 recipes per week
+    for (const recipe of recipes.slice(0, CONFIG.MAX_RECIPES_PER_BATCH)) {
       console.log(`Processing: ${recipe.name}`);
       
-      // Extract data from source
-      const extractedData = await this.extractRecipeFromURL(recipe.link);
+      // Check if recipe needs data extraction (data hierarchy logic)
+      const needsExtraction = await this.needsDataExtraction(recipe);
+      let extractedData = null;
       
-      // Get AI analysis
+      // Store page content in recipe for frontend use
+      recipe.current_page_content = needsExtraction.pageContent;
+      
+      if (needsExtraction.needsAnyData) {
+        console.log(`  → Web scraping needed for: ${needsExtraction.missingFields.join(', ')}`);
+        extractedData = await this.extractRecipeFromURL(recipe.link);
+        
+        // Only extract the fields that are missing from Notion
+        if (extractedData) {
+          extractedData = this.filterExtractedData(extractedData, needsExtraction.missingFields);
+        }
+      } else {
+        console.log(`  → Skipping web scraping - all essential data exists in Notion`);
+      }
+      
+      // Get AI analysis (only if we have basic recipe info)
       const analysis = await this.analyzeRecipeWithAI(recipe, extractedData);
       
       if (analysis) {
         reviewItems.push({
           recipe,
-          extractedData,
+          extractedData: extractedData ? this.filterExtractedData(extractedData, []) : { source: 'notion-only' },
           analysis,
           suggestedChanges: this.formatSuggestedChanges(recipe, analysis, extractedData)
         });
@@ -393,6 +495,76 @@ class RecipeEnrichmentSystem {
     }
     
     return reviewItems;
+  }
+
+  // Load page content for a recipe
+  async loadPageContent(pageId) {
+    try {
+      const response = await notion.blocks.children.list({
+        block_id: pageId,
+      });
+      
+      // Parse existing content to extract recipe data
+      const content = {};
+      
+      for (const block of response.results) {
+        if (block.type === 'paragraph' && block.paragraph?.rich_text?.[0]) {
+          const text = block.paragraph.rich_text[0].plain_text;
+          
+          // Try to parse structured content
+        }
+      }
+      
+      return content;
+    } catch (error) {
+      console.error('Error loading page content:', error);
+      return null;
+    }
+  }
+
+  // Update page content with structured recipe data
+  async updatePageContent(pageId, contentData) {
+    // No longer updating page content - just database properties
+    console.log(`Skipping page content update for ${pageId} - no content to save`);
+    return true;
+  }
+
+  // Determine if web scraping is needed based on existing Notion data
+  async needsDataExtraction(recipe) {
+    const missingFields = [];
+    
+    // Load existing page content
+    const pageContent = await this.loadPageContent(recipe.id);
+    
+    if (!pageContent) {
+      // If we can't load page content, assume we need everything
+      return {
+        needsAnyData: true,
+        missingFields: [],
+        pageContent: null
+      };
+    }
+    
+    // Check for missing essential data fields
+    
+    
+    return {
+      needsAnyData: missingFields.length > 0,
+      missingFields: missingFields,
+      pageContent: pageContent
+    };
+  }
+
+  // Filter extracted data to only include missing fields
+  filterExtractedData(extractedData, missingFields) {
+    const filtered = {};
+    
+    // Only include essential fields for UI purposes (no ingredients or instructions)
+    if (extractedData.title) filtered.title = extractedData.title;
+    if (extractedData.images) filtered.images = extractedData.images;
+    if (extractedData.imageUrl) filtered.imageUrl = extractedData.imageUrl;
+    
+    return filtered;
   }
 
   // Format suggested changes for review
@@ -442,6 +614,80 @@ class RecipeEnrichmentSystem {
     }
     
     return changes;
+  }
+
+  // Create review data with website refresh only (force re-scraping)
+  async createReviewDataWithWebsiteRefresh(recipes) {
+    const reviewItems = [];
+    
+    for (const recipe of recipes.slice(0, CONFIG.MAX_RECIPES_PER_BATCH)) {
+      console.log(`Re-scraping website for: ${recipe.name}`);
+      
+      // Force fresh scraping from website
+      const extractedData = await this.extractRecipeFromURL(recipe.link);
+      
+      // Use existing AI analysis if available, otherwise run new analysis
+      let analysis;
+      try {
+        // Try to get cached analysis first, but fallback to fresh analysis
+        analysis = await this.analyzeRecipeWithAI(recipe, extractedData);
+      } catch (error) {
+        console.log(`AI analysis failed for ${recipe.name}, using basic analysis`);
+        analysis = this.createBasicAnalysis(extractedData);
+      }
+      
+      if (analysis) {
+        reviewItems.push({
+          recipe,
+          extractedData: this.filterExtractedData(extractedData, []),
+          analysis,
+          suggestedChanges: this.formatSuggestedChanges(recipe, analysis)
+        });
+      }
+    }
+    
+    return reviewItems;
+  }
+
+  // Create review data with AI refresh only (re-run AI on existing scraped data)
+  async createReviewDataWithAIRefresh(recipes) {
+    const reviewItems = [];
+    
+    for (const recipe of recipes.slice(0, CONFIG.MAX_RECIPES_PER_BATCH)) {
+      console.log(`Re-running AI analysis for: ${recipe.name}`);
+      
+      // Use cached scraped data if available, otherwise scrape fresh
+      let extractedData = recipe.cachedExtractedData;
+      if (!extractedData) {
+        extractedData = await this.extractRecipeFromURL(recipe.link);
+      }
+      
+      // Force fresh AI analysis
+      const analysis = await this.analyzeRecipeWithAI(recipe, extractedData);
+      
+      if (analysis) {
+        reviewItems.push({
+          recipe,
+          extractedData: this.filterExtractedData(extractedData, []),
+          analysis,
+          suggestedChanges: this.formatSuggestedChanges(recipe, analysis)
+        });
+      }
+    }
+    
+    return reviewItems;
+  }
+
+  // Create basic analysis when AI fails
+  createBasicAnalysis(extractedData) {
+    return {
+      meal: null,
+      cuisine: null,
+      tags: extractedData?.ingredients?.slice(0, 3) || [],
+      key_ingredients: extractedData?.ingredients?.slice(0, 5) || [],
+      confidence: 0.5,
+      reasoning: "Basic analysis - AI processing was unavailable"
+    };
   }
 
   // Apply approved changes to Notion
@@ -656,8 +902,43 @@ class RecipeEnrichmentSystem {
 // Export for different deployment platforms
 export default RecipeEnrichmentSystem;
 
+// Validation utilities
+function validateUpdateData(updates) {
+  const allowedFields = ['title', 'meal', 'cuisine', 'tags', 'keyIngredients', 'selectedImage'];
+  const validated = {};
+  
+  for (const [key, value] of Object.entries(updates)) {
+    if (allowedFields.includes(key) && value !== undefined) {
+      validated[key] = sanitizeInput(value);
+    }
+  }
+  
+  return validated;
+}
+
+function sanitizeInput(input) {
+  if (typeof input === 'string') {
+    return input.trim().slice(0, 10000); // Limit string length
+  }
+  if (Array.isArray(input)) {
+    return input.slice(0, 50).map(item => String(item).trim().slice(0, 100)); // Limit array size and item length
+  }
+  return input;
+}
+
+function validateRecipeId(recipeId) {
+  if (!recipeId || typeof recipeId !== 'string' || recipeId.length < 10) {
+    throw new Error('Invalid recipe ID');
+  }
+  return recipeId;
+}
+
 // For Vercel API route
 export async function handler(req, res) {
+  console.log('DEBUG - Handler called with method:', req.method);
+  console.log('DEBUG - Request body exists:', !!req.body);
+  console.log('DEBUG - Request body keys:', req.body ? Object.keys(req.body) : 'no body');
+  
   const enricher = new RecipeEnrichmentSystem();
   
   // Set CORS headers
@@ -671,10 +952,39 @@ export async function handler(req, res) {
   
   try {
     if (req.method === 'GET') {
-      // Return existing enrichment data for frontend display
-      const reviewData = await enricher.createReviewData(
-        await enricher.getIncompleteRecipes()
-      );
+      // Environment check
+      if (process.env.NODE_ENV === 'development') {
+        console.log('DEBUG - Environment check:');
+        console.log('  NOTION_TOKEN present:', !!NOTION_TOKEN);
+        console.log('  DATABASE_ID present:', !!DATABASE_ID);
+      }
+      
+      const refreshType = req.query.refresh || 'notion';
+      console.log('Refresh type:', refreshType);
+      
+      let reviewData;
+      
+      if (refreshType === 'notion') {
+        // Just get fresh data from Notion without re-scraping or re-analyzing
+        const recipes = await enricher.getIncompleteRecipes();
+        reviewData = await enricher.createReviewData(recipes);
+        
+      } else if (refreshType === 'website') {
+        // Re-scrape website data but keep existing AI analysis
+        const recipes = await enricher.getIncompleteRecipes();
+        reviewData = await enricher.createReviewDataWithWebsiteRefresh(recipes);
+        
+      } else if (refreshType === 'ai') {
+        // Re-run AI analysis on existing scraped data
+        const recipes = await enricher.getIncompleteRecipes();
+        reviewData = await enricher.createReviewDataWithAIRefresh(recipes);
+        
+      } else {
+        // Default: full refresh (same as before)
+        reviewData = await enricher.createReviewData(
+          await enricher.getIncompleteRecipes()
+        );
+      }
       
       const stats = {
         totalRecipes: reviewData.length,
@@ -694,9 +1004,92 @@ export async function handler(req, res) {
       });
       
     } else if (req.method === 'POST') {
-      // Run full enrichment process
-      const result = await enricher.run();
-      return res.status(200).json(result);
+      console.log('DEBUG - POST request body:', req.body);
+      const { action, recipeId, updates } = req.body;
+      console.log('DEBUG - Extracted values:', { action, recipeId, hasUpdates: !!updates, updateKeys: updates ? Object.keys(updates) : [] });
+      
+      if (action === 'updateRecipe' && recipeId && updates) {
+        console.log('DEBUG - Entering updateRecipe logic');
+        // Validate inputs
+        const validatedRecipeId = validateRecipeId(recipeId);
+        const validatedUpdates = validateUpdateData(updates);
+        
+        // Update individual recipe
+        try {
+          const properties = {};
+          
+          // Handle title update
+          if (validatedUpdates.title) {
+            properties.Name = {
+              title: [{ text: { content: validatedUpdates.title } }]
+            };
+          }
+          
+          // Handle meal update
+          if (validatedUpdates.meal) {
+            properties.Meal = { select: { name: validatedUpdates.meal } };
+          }
+          
+          // Handle cuisine update
+          if (validatedUpdates.cuisine) {
+            properties.Cuisine = { select: { name: validatedUpdates.cuisine } };
+          }
+          
+          // Handle tags update
+          if (validatedUpdates.tags && Array.isArray(validatedUpdates.tags)) {
+            properties.Tags = {
+              multi_select: validatedUpdates.tags.map(tag => ({ name: tag }))
+            };
+          }
+          
+          // Handle key ingredients update
+          if (validatedUpdates.keyIngredients && Array.isArray(validatedUpdates.keyIngredients)) {
+            properties['Key Ingredients'] = {
+              multi_select: validatedUpdates.keyIngredients.map(ing => ({ name: ing }))
+            };
+          }
+          
+          
+          // Handle image update
+          if (validatedUpdates.selectedImage) {
+            // Add the cover image to the page
+            await notion.pages.update({
+              page_id: validatedRecipeId,
+              cover: {
+                external: {
+                  url: validatedUpdates.selectedImage
+                }
+              }
+            });
+          }
+          
+          // Update the page properties
+          if (Object.keys(properties).length > 0) {
+            await notion.pages.update({
+              page_id: validatedRecipeId,
+              properties
+            });
+          }
+          
+          return res.status(200).json({
+            success: true,
+            message: 'Recipe updated successfully'
+          });
+          
+        } catch (error) {
+          console.error('Error updating recipe:', error);
+          return res.status(500).json({
+            success: false,
+            error: 'Failed to update recipe',
+            details: error.message
+          });
+        }
+        
+      } else {
+        // Run full enrichment process
+        const result = await enricher.run();
+        return res.status(200).json(result);
+      }
       
     } else {
       return res.status(405).json({ error: 'Method not allowed' });
@@ -711,6 +1104,9 @@ export async function handler(req, res) {
     });
   }
 }
+
+// Default export for Vercel
+export default handler;
 
 // For GitHub Actions or direct execution
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 // Import our API handlers
 import { handler as enrichmentHandler } from './api/enrichment.js';
 import testNotionHandler from './api/test-notion.js';
+import demoDataHandler from './api/demo-data.js';
 
 // Load environment variables
 dotenv.config();
@@ -64,6 +65,28 @@ const server = http.createServer(async (req, res) => {
   const parsedUrl = url.parse(req.url, true);
   const pathname = parsedUrl.pathname;
 
+  // Add query parameters to request object
+  req.query = parsedUrl.query || {};
+
+  // Parse POST body if present
+  if (req.method === 'POST' && (req.headers['content-type'] || '').includes('application/json')) {
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+    
+    await new Promise((resolve) => {
+      req.on('end', () => {
+        try {
+          req.body = JSON.parse(body);
+        } catch (e) {
+          req.body = {};
+        }
+        resolve();
+      });
+    });
+  }
+
   console.log(`${req.method} ${pathname}`);
 
   // Handle API routes
@@ -72,10 +95,15 @@ const server = http.createServer(async (req, res) => {
     
     try {
       if (pathname === '/api/enrichment') {
+        console.log('🚀 Local server calling enrichmentHandler for', req.method);
+        console.log('🚀 Request body:', req.body);
         await enrichmentHandler(req, mockRes);
         return;
       } else if (pathname === '/api/test-notion') {
         await testNotionHandler(req, mockRes);
+        return;
+      } else if (pathname === '/api/demo-data') {
+        await demoDataHandler(req, mockRes);
         return;
       } else {
         mockRes.status(404).json({ error: 'API endpoint not found' });
@@ -127,6 +155,7 @@ server.listen(PORT, () => {
   console.log(`📊 Dashboard: http://localhost:${PORT}`);
   console.log(`🧪 Test Notion: http://localhost:${PORT}/api/test-notion`);
   console.log(`🤖 Enrichment API: http://localhost:${PORT}/api/enrichment`);
+  console.log(`🎭 Demo Data: http://localhost:${PORT}/api/demo-data`);
   console.log('\n✅ Environment variables loaded from .env');
   console.log(`   - Notion Token: ${process.env.NOTION_TOKEN ? 'Present' : 'Missing'}`);
   console.log(`   - OpenAI Key: ${process.env.OPENAI_API_KEY ? 'Present' : 'Missing'}`);
