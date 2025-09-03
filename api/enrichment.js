@@ -77,7 +77,7 @@ const INGREDIENT_OPTIONS = RECIPE_OPTIONS.INGREDIENTS;
 class RecipeEnrichmentSystem {
   constructor() {
     if (EMAIL_USER && EMAIL_PASS) {
-      this.emailTransporter = nodemailer.createTransporter({
+      this.emailTransporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
           user: EMAIL_USER,
